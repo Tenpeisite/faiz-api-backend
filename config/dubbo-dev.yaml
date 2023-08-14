@@ -1,0 +1,10 @@
+dubbo:
+  application:
+    name: dubbo-springboot-demo-provider
+  protocal:
+    name: dubbo
+    port: -1
+  registry:
+    id: nacos-registry
+    address: nacos://localhost:8848?namespace=api_dev
+    group: dubbo

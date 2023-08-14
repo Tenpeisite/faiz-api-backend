@@ -1,0 +1,30 @@
+server:
+  port: 8090
+
+#开启日志
+logging:
+  level:
+    org:
+      springframework:
+        cloud:
+          gateway: trace
+spring:
+  cloud:
+    gateway:
+      default-filters:
+        - AddRequestHeader=apiHeader, api #流量染色
+      routes:
+        - id: interface
+          uri: lb://api-interface
+          predicates:
+            - Path=/api/**
+          filters:
+            - name: CustomRequestRateLimiter
+              args:
+                key-resolver: '#{@hostAddrKeyResolver}' #使用springEL表达式，从容器中找对象，并赋值
+                redis-rate-limiter.replenishRate: 1 # 生产令牌的速度，每秒多少个令牌
+                redis-rate-limiter.burstCapacity: 100 # 令牌桶容量
+  redis:
+    port: 6379
+    host: 192.168.101.65
+    password: redis
