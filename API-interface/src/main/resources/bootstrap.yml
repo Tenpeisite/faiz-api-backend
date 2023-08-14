@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: api-interface
+  cloud:
+    nacos:
+      server-addr: localhost:8848
+      discovery:
+        namespace: api_dev
+        group: api-project
+      config:
+        namespace: api_dev
+        group: api-project
+        file-extension: yaml
+        refresh-enabled: true
+        extension-configs:
+          - data-id: api-interface-${spring.profiles.active}.yaml
+            group: api-project
+            refresh: true
+        shared-configs:
+          - data-id: dubbo-${spring.profiles.active}.yaml
+            group: dubbo
+            refresh: true
+      password: nacos
+      username: nacos
+
+  profiles:
+    active: dev

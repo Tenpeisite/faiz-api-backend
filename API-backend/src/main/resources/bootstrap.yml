@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: backend
+  cloud:
+    nacos:
+      server-addr: localhost:8848
+      discovery:
+        namespace: api_dev
+        group: api-project
+      config:
+        namespace: api_dev
+        group: api-project
+        file-extension: yaml
+        refresh-enabled: true
+        extension-configs:
+          - data-id: api-backend-${spring.profiles.active}.yaml
+            group: api-project
+            refresh: true
+        shared-configs:
+          - data-id: dubbo-${spring.profiles.active}.yaml
+            group: dubbo
+            refresh: true
+      password: nacos
+      username: nacos
+#    sentinel:
+#      transport:
+#        dashboard: localhost:8080
+#      web-context-unify: false
+
+  profiles:
+    active: dev
+#canal:
+#  destination: heima # canal实例名称，要跟canal-server运行时设置的destination一致
+#  server: 192.168.101.65:11111 # canal地址
+
