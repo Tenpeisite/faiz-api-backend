@@ -111,6 +111,11 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         if (System.currentTimeMillis() / 1000 - Long.parseLong(timestamp) > 5 * 60) {
             return handleNoAuth(response);
         }
+        //防止重放-第二步(随机数在redis中不能存在)
+        if (StringUtils.isBlank(nonce) || stringRedisTemplate.hasKey(nonce)) {//判断是否包含随机数
+            return handleNoAuth(response);
+        }
+        stringRedisTemplate.opsForValue().set(nonce, "", 5 * 60, TimeUnit.SECONDS);
         //利用accesskey查询用户
         User invokeUser = null;
         try {
@@ -121,11 +126,6 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         if (invokeUser == null) {
             return handleNoAuth(response);
         }
-        //防止重放-第二步(随机数在redis中不能存在)
-        if (StringUtils.isBlank(nonce) || stringRedisTemplate.hasKey(nonce)) {//判断是否包含随机数
-            return handleNoAuth(response);
-        }
-        stringRedisTemplate.opsForValue().set(nonce, "", 5 * 60, TimeUnit.SECONDS);
         String secretKey = invokeUser.getSecretKey();
         String serverSign = SignUtils.getSign(body, secretKey);
         if (sign == null || !sign.equals(serverSign)) {
