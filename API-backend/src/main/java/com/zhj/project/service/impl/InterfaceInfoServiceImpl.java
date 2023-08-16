@@ -97,6 +97,8 @@ public class InterfaceInfoServiceImpl extends ServiceImpl<InterfaceInfoMapper, I
             return JSON.parseObject(json, InterfaceInfo.class);
         }
         String key1 = CaffeineConstant.INTERFACE + id;
-        return interfaceInfoCache.get(key1, item -> getById(id));
+        InterfaceInfo interfaceInfo = interfaceInfoCache.get(key1, item -> getById(id));
+        stringRedisTemplate.opsForValue().set(key, JSON.toJSONString(interfaceInfo), RedisConstant.EXPIRE_TIME, TimeUnit.MINUTES);
+        return interfaceInfo;
     }
 }
