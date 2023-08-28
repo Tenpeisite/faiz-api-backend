@@ -209,8 +209,9 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
                             return super.writeWith(
                                     fluxBody.map(dataBuffer -> {
                                         // 7. 调用成功，接口调用次数 + 1 invokeCount
+                                        boolean flag = false;
                                         try {
-                                            boolean flag = innerUserInterfaceInfoService.invokeCount(interfaceInfoId, userId);
+                                            flag = innerUserInterfaceInfoService.invokeCount(interfaceInfoId, userId);
                                             log.info("<-------修改接口调用次数：{}", flag == true ? "成功" : "失败");
                                         } catch (Exception e) {
                                             log.error("invokeCount error", e);
