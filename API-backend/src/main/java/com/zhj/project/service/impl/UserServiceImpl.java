@@ -29,6 +29,7 @@ import javax.servlet.http.HttpServletRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 
 import static com.zhj.common.constant.UserConstant.ADMIN_ROLE;
 import static com.zhj.common.constant.UserConstant.USER_LOGIN_STATE;
@@ -190,11 +191,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Transactional
     public boolean updateKey(Long id) {
         User user = getById(id);
-        String accessKey = DigestUtil.md5Hex(UserConstant.SALT + user.getUserAccount() + RandomUtil.randomNumbers(5));
-        String secretKey = DigestUtil.md5Hex(UserConstant.SALT + user.getUserAccount() + RandomUtil.randomNumbers(8));
+        String accessKey = generateUniqueKey(user.getUserAccount(), RandomUtil.randomNumbers(5));
+        String secretKey = generateUniqueKey(user.getUserAccount(), RandomUtil.randomNumbers(8));
         user.setAccessKey(accessKey);
         user.setSecretKey(secretKey);
         return updateById(user);
+    }
+
+    public static String generateUniqueKey(String userAccount, String random) {
+        UUID uuid = UUID.randomUUID();
+        String combinedString = UserConstant.SALT + userAccount + random + uuid.toString();
+        // 使用MD5哈希算法生成Key
+        String key = DigestUtil.md5Hex(combinedString);
+        return key;
     }
 
     //远程调用微信拿令牌，拿到令牌查询用户信息，将用户信息写入数据库
