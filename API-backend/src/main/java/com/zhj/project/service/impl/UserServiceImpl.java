@@ -4,9 +4,12 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhj.common.constant.UserConstant;
+import com.zhj.common.model.dto.user.UserRegisterRequest;
 import com.zhj.common.model.entity.User;
+import com.zhj.common.model.vo.UserVO;
 import com.zhj.common.utils.ErrorCode;
 import com.zhj.project.exception.BusinessException;
 import com.zhj.project.mapper.UserMapper;
@@ -15,6 +18,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.http.HttpMethod;
@@ -29,6 +33,7 @@ import javax.servlet.http.HttpServletRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 import static com.zhj.common.constant.UserConstant.ADMIN_ROLE;
@@ -65,21 +70,31 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      */
     //private static final String SALT = "yupi";
     @Override
-    public long userRegister(String userAccount, String userPassword, String checkPassword) {
+    @Transactional(rollbackFor = Exception.class)
+    public long userRegister(UserRegisterRequest userRegisterRequest) {
+        String userAccount = userRegisterRequest.getUserAccount();
+        String userPassword = userRegisterRequest.getUserPassword();
+        String checkPassword = userRegisterRequest.getCheckPassword();
+        String userName = userRegisterRequest.getUserName();
+        String invitationCode = userRegisterRequest.getInvitationCode();
         // 1. 校验
         if (StringUtils.isAnyBlank(userAccount, userPassword, checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         }
+        if (userName.length() > 40) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "昵称过长");
+        }
         if (userAccount.length() < 4) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户账号过短");
         }
-        if (userPassword.length() < 8 || checkPassword.length() < 8) {
+        if (userPassword.length() < 6 || checkPassword.length() < 6) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户密码过短");
         }
         // 密码和校验密码相同
         if (!userPassword.equals(checkPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次输入的密码不一致");
         }
+
         synchronized (userAccount.intern()) {
             // 账户不能重复
             QueryWrapper<User> queryWrapper = new QueryWrapper<>();
@@ -91,13 +106,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             }
             // 2. 加密
             String encryptPassword = DigestUtils.md5DigestAsHex((UserConstant.SALT + userPassword).getBytes());
+            String accessKey = generateUniqueKey(userAccount, RandomUtil.randomNumbers(5));
+            String secretKey = generateUniqueKey(userAccount, RandomUtil.randomNumbers(8));
 
             // 3. 插入数据
             User user = new User();
             user.setUserAccount(userAccount);
-            user.setUserName(userAccount);
             user.setUserPassword(encryptPassword);
+            user.setUserName(userName);
+            user.setAccessKey(accessKey);
+            user.setSecretKey(secretKey);
+            user.setInvitationCode(generateRandomString(8));
+
+            //查询邀请码对应用户
+            User invitUser = lambdaQuery().eq(User::getInvitationCode, invitationCode).one();
+            if (invitUser != null) {
+                user.setBalance(100);
+                invitUser.setBalance(invitUser.getBalance() + 100);
+                updateById(invitUser);
+            }
+            //保存数据
             boolean saveResult = this.save(user);
+
             if (!saveResult) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册失败，数据库错误");
             }
@@ -115,7 +145,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (userAccount.length() < 4) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号错误");
         }
-        if (userPassword.length() < 8) {
+        if (userPassword.length() < 6) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码错误");
         }
         // 2. 加密
@@ -135,6 +165,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return user;
     }
 
+    @Override
+    public boolean addWalletBalance(Long userId, Integer addPoints) {
+        LambdaUpdateWrapper<User> userLambdaUpdateWrapper = new LambdaUpdateWrapper<>();
+        userLambdaUpdateWrapper.eq(User::getId, userId);
+        userLambdaUpdateWrapper.setSql("balance = balance + " + addPoints);
+        return this.update(userLambdaUpdateWrapper);
+    }
+
     /**
      * 获取当前登录用户
      *
@@ -142,20 +180,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @return
      */
     @Override
-    public User getLoginUser(HttpServletRequest request) {
+    public UserVO getLoginUser(HttpServletRequest request) {
         // 先判断是否已登录
-        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        Object userObj = request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);
         User currentUser = (User) userObj;
         if (currentUser == null || currentUser.getId() == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
         // 从数据库查询（追求性能的话可以注释，直接走缓存）
         long userId = currentUser.getId();
-        currentUser = this.getById(userId);
-        if (currentUser == null) {
+        User user = this.getById(userId);
+        if (user == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
-        return currentUser;
+        if (user.getStatus().equals(1)) {
+            throw new BusinessException(ErrorCode.PROHIBITED, "账号已封禁");
+        }
+        UserVO userVO = new UserVO();
+        BeanUtils.copyProperties(user, userVO);
+        return userVO;
     }
 
     /**
@@ -170,6 +213,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
         User user = (User) userObj;
         return user != null && ADMIN_ROLE.equals(user.getUserRole());
+    }
+
+    @Override
+    public User isTourist(HttpServletRequest request) {
+        Object userObj = request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);
+        User currentUser = (User) userObj;
+        return currentUser == null || currentUser.getId() == null ? null : currentUser;
     }
 
     /**
@@ -188,7 +238,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     @Override
-    @Transactional
     public boolean updateKey(Long id) {
         User user = getById(id);
         String accessKey = generateUniqueKey(user.getUserAccount(), RandomUtil.randomNumbers(5));
@@ -305,6 +354,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         String result = new String(exchange.getBody().getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
         Map<String, String> map = JSON.parseObject(result, Map.class);
         return map;
+    }
+
+
+    /**
+     * 生成随机字符串
+     *
+     * @param length 长
+     * @return {@link String}
+     */
+    public String generateRandomString(int length) {
+        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        StringBuilder sb = new StringBuilder(length);
+        Random random = new Random();
+        for (int i = 0; i < length; i++) {
+            int index = random.nextInt(characters.length());
+            char randomChar = characters.charAt(index);
+            sb.append(randomChar);
+        }
+        return sb.toString();
     }
 
 }

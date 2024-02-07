@@ -39,7 +39,7 @@ public class TransactionalServiceImpl implements TransactionalService {
         user.setUserName(nickname);
         // 性别(1男2女)
         String sex = userInfo.get("sex");
-        user.setGender(Integer.valueOf(sex));
+        //user.setGender(Integer.valueOf(sex));
         // 头像
         String img = userInfo.get("headimgurl");
         user.setUserAvatar(img);

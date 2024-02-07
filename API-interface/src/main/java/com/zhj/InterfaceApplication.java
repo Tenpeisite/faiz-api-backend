@@ -11,10 +11,10 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
         DataSourceTransactionManagerAutoConfiguration.class,
         HibernateJpaAutoConfiguration.class})
 @EnableDubbo
-public class YuapiInterfaceApplication {
+public class InterfaceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(YuapiInterfaceApplication.class, args);
+        SpringApplication.run(InterfaceApplication.class, args);
     }
 
 }

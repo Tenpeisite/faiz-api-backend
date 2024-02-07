@@ -1,8 +1,6 @@
 package com.zhj.common.model.dto.interfaceinfo;
 
 
-import com.zhj.common.model.vo.RequestParamsRemarkVO;
-import com.zhj.common.model.vo.ResponseParamsRemarkVO;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -11,64 +9,54 @@ import java.util.List;
 /**
  * 创建请求
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * @author zhj
+ * 
  */
 @Data
-public class InterfaceInfoAddRequest implements Serializable {
+public class InterfaceInfoAddRequest implements Serializable { private static final long serialVersionUID = 1L;
     /**
-     * 名称
+     * 接口名称
      */
     private String name;
-
     /**
-     * 描述
+     * 返回格式
      */
-    private String description;
-
+    private String returnFormat;
     /**
      * 接口地址
      */
     private String url;
-
     /**
-     * 接口路径
+     * 接口响应参数
      */
-    private String path;
-
+    private List<ResponseParamsField> responseParams;
     /**
-     * 方法名
+     * 请求方法
      */
-    private String methodName;
-
+    private String method;
     /**
-     * 请求参数
+     * 减少积分个数
      */
-    private String requestParams;
-
+    private Integer reduceScore;
     /**
-     * 请求参数说明
+     * 接口请求参数
      */
-    private List<RequestParamsRemarkVO> requestParamsRemark;
+    private List<RequestParamsField> requestParams;
     /**
-     * 响应参数说明
+     * 描述信息
      */
-    private List<ResponseParamsRemarkVO> responseParamsRemark;
-
+    private String description;
+    /**
+     * 请求示例
+     */
+    private String requestExample;
     /**
      * 请求头
      */
     private String requestHeader;
-
     /**
      * 响应头
      */
     private String responseHeader;
-
-
-    /**
-     * 请求类型
-     */
-    private String method;
 
 }

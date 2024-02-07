@@ -25,7 +25,7 @@ import static com.zhj.common.constant.CommonConstant.INTERFACE_RANK;
  * @description TODO
  * @date 2023/4/22 14:04
  */
-@Component
+//@Component
 public class InitTask implements CommandLineRunner {
 
     @Resource

@@ -1,6 +1,7 @@
 package com.zhj.project.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.plugins.pagination.PageDTO;
@@ -53,13 +54,7 @@ public class UserController {
         if (userRegisterRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        String userAccount = userRegisterRequest.getUserAccount();
-        String userPassword = userRegisterRequest.getUserPassword();
-        String checkPassword = userRegisterRequest.getCheckPassword();
-        if (StringUtils.isAnyBlank(userAccount, userPassword, checkPassword)) {
-            return null;
-        }
-        long result = userService.userRegister(userAccount, userPassword, checkPassword);
+        long result = userService.userRegister(userRegisterRequest);
         return ResultUtils.success(result);
     }
 
@@ -109,10 +104,9 @@ public class UserController {
      */
     @GetMapping("/get/login")
     public BaseResponse<UserVO> getLoginUser(HttpServletRequest request) {
-        User user = userService.getLoginUser(request);
+        UserVO user = userService.getLoginUser(request);
         UserVO userVO = new UserVO();
         BeanUtils.copyProperties(user, userVO);
-        userVO.setSecretKey(null);
         return ResultUtils.success(userVO);
     }
 
@@ -261,9 +255,25 @@ public class UserController {
         return ResultUtils.success(flag);
     }
 
+    @PostMapping("/update/voucher")
+    public BaseResponse<UserVO> updateVoucher(HttpServletRequest request) {
+        UserVO loginUser = userService.getLoginUser(request);
+        if (loginUser == null) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+        boolean flag = userService.updateKey(loginUser.getId());
+        if (!flag) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+        }
+        User user = userService.getById(loginUser.getId());
+        UserVO userVO = new UserVO();
+        BeanUtils.copyProperties(user, userVO);
+        return ResultUtils.success(userVO);
+    }
+
     @GetMapping("/getSecretKey")
     public BaseResponse<String> getSecretKey(Long userId, HttpServletRequest request) {
-        User loginUser = userService.getLoginUser(request);
+        UserVO loginUser = userService.getLoginUser(request);
         if (loginUser == null) {
             //用户未登录
             new BusinessException(ErrorCode.NO_AUTH_ERROR);
@@ -275,7 +285,7 @@ public class UserController {
     }
 
     @GetMapping("/wxLogin")
-    public String wxLogin(@RequestParam("code") String code, @RequestParam("state") String state,HttpServletRequest request) throws IOException {
+    public String wxLogin(@RequestParam("code") String code, @RequestParam("state") String state, HttpServletRequest request) throws IOException {
         log.debug("微信扫码回调，code:{},state:{}", code, state);
 
         //拿授权码申请令牌,查询用户
@@ -285,4 +295,28 @@ public class UserController {
 
         return "redirect:http://localhost:8000/";
     }
+
+
+    /**
+     * 通过邀请码获取用户
+     *
+     * @param invitationCode 邀请码
+     * @return {@link BaseResponse}<{@link UserVO}>
+     */
+    @PostMapping("/get/invitationCode")
+    public BaseResponse<UserVO> getUserByInvitationCode(String invitationCode) {
+        if (StringUtils.isBlank(invitationCode)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        LambdaQueryWrapper<User> userLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        userLambdaQueryWrapper.eq(User::getInvitationCode, invitationCode);
+        User invitationCodeUser = userService.getOne(userLambdaQueryWrapper);
+        if (invitationCodeUser == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "邀请码不存在");
+        }
+        UserVO userVO = new UserVO();
+        BeanUtils.copyProperties(invitationCodeUser, userVO);
+        return ResultUtils.success(userVO);
+    }
+
 }
