@@ -2,22 +2,21 @@ package com.zhj.project.controller;
 
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.json.JSONUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhj.apiclientsdk.client.ApiClient;
-import com.zhj.common.model.dto.interfaceinfo.InterfaceInfoAddRequest;
-import com.zhj.common.model.dto.interfaceinfo.InterfaceInfoInvokeRequest;
-import com.zhj.common.model.dto.interfaceinfo.InterfaceInfoQueryRequest;
-import com.zhj.common.model.dto.interfaceinfo.InterfaceInfoUpdateRequest;
+import com.zhj.common.constant.CommonConstant;
+import com.zhj.common.constant.UserConstant;
+import com.zhj.common.model.dto.interfaceinfo.*;
 import com.zhj.common.model.entity.InterfaceInfo;
 import com.zhj.common.model.entity.User;
 import com.zhj.common.model.enums.InterfaceInfoStatusEnum;
-import com.zhj.common.model.vo.InterfacePageVo;
-import com.zhj.common.model.vo.InterfaceVO;
-import com.zhj.common.model.vo.RequestParamsRemarkVO;
-import com.zhj.common.model.vo.ResponseParamsRemarkVO;
+import com.zhj.common.model.enums.InterfaceStatusEnum;
+import com.zhj.common.model.vo.*;
 import com.zhj.common.utils.*;
 import com.zhj.project.service.RequestMethod;
 import com.zhj.project.annotation.AuthCheck;
@@ -26,8 +25,10 @@ import com.zhj.project.service.InterfaceInfoService;
 import com.zhj.project.service.impl.RequestMethodFactory;
 import com.zhj.project.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -66,21 +67,28 @@ public class InterfaceInfoController {
      * @return
      */
     @PostMapping("/add")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> addInterfaceInfo(@RequestBody InterfaceInfoAddRequest interfaceInfoAddRequest, HttpServletRequest request) {
         if (interfaceInfoAddRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         InterfaceInfo interfaceInfo = new InterfaceInfo();
+        if (CollectionUtils.isNotEmpty(interfaceInfoAddRequest.getRequestParams())) {
+            List<RequestParamsField> requestParamsFields = interfaceInfoAddRequest.getRequestParams().stream().filter(field -> StringUtils.isNotBlank(field.getFieldName())).collect(Collectors.toList());
+            String requestParams = JSONUtil.toJsonStr(requestParamsFields);
+            interfaceInfo.setRequestParams(requestParams);
+        }
+        if (CollectionUtils.isNotEmpty(interfaceInfoAddRequest.getResponseParams())) {
+            List<ResponseParamsField> responseParamsFields = interfaceInfoAddRequest.getResponseParams().stream().filter(field -> StringUtils.isNotBlank(field.getFieldName())).collect(Collectors.toList());
+            String responseParams = JSONUtil.toJsonStr(responseParamsFields);
+            interfaceInfo.setResponseParams(responseParams);
+        }
         BeanUtils.copyProperties(interfaceInfoAddRequest, interfaceInfo);
         // 校验
         interfaceInfoService.validInterfaceInfo(interfaceInfo, true);
-        User loginUser = userService.getLoginUser(request);
+        UserVO loginUser = userService.getLoginUser(request);
         interfaceInfo.setUserId(loginUser.getId());
-        //请求参数
-        interfaceInfo.setRequestParamsRemark(JSON.toJSONString(interfaceInfoAddRequest.getRequestParamsRemark()));
-        //响应参数
-        interfaceInfo.setResponseParamsRemark(JSON.toJSONString(interfaceInfoAddRequest.getResponseParamsRemark()));
-        boolean result = interfaceInfoService.saveInterface(interfaceInfo);
+        boolean result = interfaceInfoService.save(interfaceInfo);
         if (!result) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR);
         }
@@ -100,7 +108,7 @@ public class InterfaceInfoController {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        User user = userService.getLoginUser(request);
+        UserVO user = userService.getLoginUser(request);
         long id = deleteRequest.getId();
         // 判断是否存在
         InterfaceInfo oldInterfaceInfo = interfaceInfoService.getInterfaceById(id);
@@ -116,6 +124,25 @@ public class InterfaceInfoController {
     }
 
     /**
+     * 更新接口头像url
+     *
+     * @param request                          请求
+     * @param interfaceInfoUpdateAvatarRequest 界面信息更新头像请求
+     * @return {@link BaseResponse}<{@link Boolean}>
+     */
+    @PostMapping("/updateInterfaceInfoAvatar")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> updateInterfaceInfoAvatarUrl(@RequestBody InterfaceInfoUpdateAvatarRequest interfaceInfoUpdateAvatarRequest,
+                                                              HttpServletRequest request) {
+        if (ObjectUtils.anyNull(interfaceInfoUpdateAvatarRequest, interfaceInfoUpdateAvatarRequest.getId()) || interfaceInfoUpdateAvatarRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        InterfaceInfo interfaceInfo = new InterfaceInfo();
+        BeanUtils.copyProperties(interfaceInfoUpdateAvatarRequest, interfaceInfo);
+        return ResultUtils.success(interfaceInfoService.updateById(interfaceInfo));
+    }
+
+    /**
      * 更新
      *
      * @param interfaceInfoUpdateRequest
@@ -123,31 +150,39 @@ public class InterfaceInfoController {
      * @return
      */
     @PostMapping("/update")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @Transactional(rollbackFor = Exception.class)
     public BaseResponse<Boolean> updateInterfaceInfo(@RequestBody InterfaceInfoUpdateRequest interfaceInfoUpdateRequest,
                                                      HttpServletRequest request) {
-        if (interfaceInfoUpdateRequest == null || interfaceInfoUpdateRequest.getId() <= 0) {
+        if (ObjectUtils.anyNull(interfaceInfoUpdateRequest, interfaceInfoUpdateRequest.getId()) || interfaceInfoUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         InterfaceInfo interfaceInfo = new InterfaceInfo();
+        if (CollectionUtils.isNotEmpty(interfaceInfoUpdateRequest.getRequestParams())) {
+            List<RequestParamsField> requestParamsFields = interfaceInfoUpdateRequest.getRequestParams().stream().filter(field -> StringUtils.isNotBlank(field.getFieldName())).collect(Collectors.toList());
+            String requestParams = JSONUtil.toJsonStr(requestParamsFields);
+            interfaceInfo.setRequestParams(requestParams);
+        }
+        if (CollectionUtils.isNotEmpty(interfaceInfoUpdateRequest.getResponseParams())) {
+            List<ResponseParamsField> responseParamsFields = interfaceInfoUpdateRequest.getResponseParams().stream().filter(field -> StringUtils.isNotBlank(field.getFieldName())).collect(Collectors.toList());
+            String responseParams = JSONUtil.toJsonStr(responseParamsFields);
+            interfaceInfo.setResponseParams(responseParams);
+        }
         BeanUtils.copyProperties(interfaceInfoUpdateRequest, interfaceInfo);
         // 参数校验
         interfaceInfoService.validInterfaceInfo(interfaceInfo, false);
-        User user = userService.getLoginUser(request);
+        UserVO user = userService.getLoginUser(request);
         long id = interfaceInfoUpdateRequest.getId();
         // 判断是否存在
-        InterfaceInfo oldInterfaceInfo = interfaceInfoService.getInterfaceById(id);
+        InterfaceInfo oldInterfaceInfo = interfaceInfoService.getById(id);
         if (oldInterfaceInfo == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
         // 仅本人或管理员可修改
-        if (!oldInterfaceInfo.getUserId().equals(user.getId()) && !userService.isAdmin(request)) {
+        if (!userService.isAdmin(request) && !oldInterfaceInfo.getUserId().equals(user.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
-        //请求参数
-        interfaceInfo.setRequestParamsRemark(JSON.toJSONString(interfaceInfoUpdateRequest.getRequestParamsRemark()));
-        //响应参数
-        interfaceInfo.setResponseParamsRemark(JSON.toJSONString(interfaceInfoUpdateRequest.getResponseParamsRemark()));
-        boolean result = interfaceInfoService.updateInterfaceById(interfaceInfo);
+        boolean result = interfaceInfoService.updateById(interfaceInfo);
         return ResultUtils.success(result);
     }
 
@@ -158,15 +193,12 @@ public class InterfaceInfoController {
      * @return
      */
     @GetMapping("/get")
-    public BaseResponse<InterfaceVO> getInterfaceInfoById(long id) {
+    public BaseResponse<InterfaceInfo> getInterfaceInfoById(long id) {
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        InterfaceInfo interfaceInfo = interfaceInfoService.getInterfaceById(id);
-        InterfaceVO interfaceVO = BeanUtil.copyProperties(interfaceInfo, InterfaceVO.class, "requestParamsRemark", "responseParamsRemark");
-        interfaceVO.setRequestParamsRemark(JSON.parseObject(interfaceInfo.getRequestParamsRemark(), List.class));
-        interfaceVO.setResponseParamsRemark(JSON.parseObject(interfaceInfo.getResponseParamsRemark(), List.class));
-        return ResultUtils.success(interfaceVO);
+        InterfaceInfo interfaceInfo = interfaceInfoService.getById(id);
+        return ResultUtils.success(interfaceInfo);
     }
 
     /**
@@ -195,49 +227,84 @@ public class InterfaceInfoController {
      * @return
      */
     @GetMapping("/list/page")
-    public BaseResponse<InterfacePageVo> listInterfaceInfoByPage(InterfaceInfoQueryRequest interfaceInfoQueryRequest, HttpServletRequest request) {
+    public BaseResponse<Page<InterfaceInfo>> listInterfaceInfoByPage(InterfaceInfoQueryRequest interfaceInfoQueryRequest, HttpServletRequest request) {
+        if (interfaceInfoQueryRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        InterfaceInfo interfaceInfoQuery = new InterfaceInfo();
+        BeanUtils.copyProperties(interfaceInfoQueryRequest, interfaceInfoQuery);
+        long size = interfaceInfoQueryRequest.getPageSize();
+        String sortField = interfaceInfoQueryRequest.getSortField();
+        String sortOrder = interfaceInfoQueryRequest.getSortOrder();
+        String url = interfaceInfoQueryRequest.getUrl();
+
+        String name = interfaceInfoQueryRequest.getName();
+        long current = interfaceInfoQueryRequest.getCurrent();
+        String method = interfaceInfoQueryRequest.getMethod();
+        String description = interfaceInfoQueryRequest.getDescription();
+        Integer status = interfaceInfoQueryRequest.getStatus();
+        Integer reduceScore = interfaceInfoQueryRequest.getReduceScore();
+        String returnFormat = interfaceInfoQueryRequest.getReturnFormat();
+        // 限制爬虫
+        if (size > 50) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        QueryWrapper<InterfaceInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.like(StringUtils.isNotBlank(name), "name", name)
+                .like(StringUtils.isNotBlank(description), "description", description)
+                .like(StringUtils.isNotBlank(url), "url", url)
+                .like(StringUtils.isNotBlank(returnFormat), "returnFormat", returnFormat)
+                .eq(StringUtils.isNotBlank(method), "method", method)
+                .eq(ObjectUtils.isNotEmpty(status), "status", status)
+                .eq(ObjectUtils.isNotEmpty(reduceScore), "reduceScore", reduceScore);
+        queryWrapper.orderBy(StringUtils.isNotBlank(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC), sortField);
+        Page<InterfaceInfo> interfaceInfoPage = interfaceInfoService.page(new Page<>(current, size), queryWrapper);
+        User user = userService.isTourist(request);
+        // 不是管理员只能查看已经上线的
+        if (user == null || !user.getUserRole().equals(UserConstant.ADMIN_ROLE)) {
+            List<InterfaceInfo> interfaceInfoList = interfaceInfoPage.getRecords().stream()
+                    .filter(interfaceInfo -> interfaceInfo.getStatus().equals(InterfaceStatusEnum.ONLINE.getValue())).collect(Collectors.toList());
+            interfaceInfoPage.setRecords(interfaceInfoList);
+        }
+        return ResultUtils.success(interfaceInfoPage);
+    }
+
+
+    /**
+     * 按搜索文本页查询数据
+     *
+     * @param interfaceInfoQueryRequest 接口信息查询请求
+     * @param request                   请求
+     * @return {@link BaseResponse}<{@link Page}<{@link InterfaceInfo}>>
+     */
+    @GetMapping("/get/searchText")
+    public BaseResponse<Page<InterfaceInfo>> listInterfaceInfoBySearchTextPage(InterfaceInfoSearchTextRequest interfaceInfoQueryRequest, HttpServletRequest request) {
         if (interfaceInfoQueryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         InterfaceInfo interfaceInfoQuery = new InterfaceInfo();
         BeanUtils.copyProperties(interfaceInfoQueryRequest, interfaceInfoQuery);
-        long current = interfaceInfoQueryRequest.getCurrent();
+
+        String searchText = interfaceInfoQueryRequest.getSearchText();
         long size = interfaceInfoQueryRequest.getPageSize();
+        long current = interfaceInfoQueryRequest.getCurrent();
         String sortField = interfaceInfoQueryRequest.getSortField();
         String sortOrder = interfaceInfoQueryRequest.getSortOrder();
-        String name = interfaceInfoQuery.getName();
-        String method = interfaceInfoQuery.getMethod();
-        String description = interfaceInfoQuery.getDescription();
-        Integer status = interfaceInfoQuery.getStatus();
-        // content 需支持模糊搜索
-        interfaceInfoQuery.setDescription(null);
-        // 限制爬虫
-        if (size > 50) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        LambdaQueryWrapper<InterfaceInfo> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.like(StringUtils.isNotBlank(description), InterfaceInfo::getDescription, description)
-                .like(StringUtils.isNotBlank(name), InterfaceInfo::getName, name)
-                .like(StringUtils.isNotBlank(method), InterfaceInfo::getMethod, method)
-                .like(status != null, InterfaceInfo::getStatus, status)
-                .orderByDesc(InterfaceInfo::getUpdateTime);
-        //queryWrapper.orderBy(StringUtils.isNotBlank(sortField),
-        //        sortOrder.equals(CommonConstant.SORT_ORDER_ASC), sortField);
+
+        QueryWrapper<InterfaceInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.like(StringUtils.isNotBlank(searchText), "name", searchText)
+                .or()
+                .like(StringUtils.isNotBlank(searchText), "description", searchText);
+        queryWrapper.orderBy(StringUtils.isNotBlank(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC), sortField);
         Page<InterfaceInfo> interfaceInfoPage = interfaceInfoService.page(new Page<>(current, size), queryWrapper);
-        List<InterfaceInfo> interfaceInfos = interfaceInfoPage.getRecords();
-        List<InterfaceVO> records = interfaceInfos.stream().map(interfaceInfo -> {
-            InterfaceVO interfaceVO = BeanUtil.copyProperties(interfaceInfo, InterfaceVO.class, "requestParamsRemark", "responseParamsRemark");
-            List<RequestParamsRemarkVO> requestParamsRemarkVOS = JSON.parseObject(interfaceInfo.getRequestParamsRemark(),
-                    new com.alibaba.fastjson.TypeReference<List<RequestParamsRemarkVO>>() {
-                    });
-            interfaceVO.setRequestParamsRemark(requestParamsRemarkVOS);
-            List<ResponseParamsRemarkVO> responseParamsRemarkVOS = JSON.parseObject(interfaceInfo.getResponseParamsRemark(),
-                    new com.alibaba.fastjson.TypeReference<List<ResponseParamsRemarkVO>>() {
-                    });
-            interfaceVO.setResponseParamsRemark(responseParamsRemarkVOS);
-            return interfaceVO;
-        }).collect(Collectors.toList());
-        return ResultUtils.success(new InterfacePageVo(records, interfaceInfoPage.getTotal()));
+        // 不是管理员只能查看已经上线的
+        if (!userService.isAdmin(request)) {
+            List<InterfaceInfo> interfaceInfoList = interfaceInfoPage.getRecords().stream()
+                    .filter(interfaceInfo -> interfaceInfo.getStatus().equals(InterfaceStatusEnum.ONLINE.getValue())).collect(Collectors.toList());
+            interfaceInfoPage.setRecords(interfaceInfoList);
+        }
+        return ResultUtils.success(interfaceInfoPage);
     }
 
     /**
@@ -249,28 +316,16 @@ public class InterfaceInfoController {
     @PostMapping("/online")
     @AuthCheck(mustRole = "admin")
     public BaseResponse<Boolean> onlineInterfaceInfo(@RequestBody IdRequest idRequest) {
-        if (idRequest == null || idRequest.getId() <= 0) {
+        if (ObjectUtils.anyNull(idRequest, idRequest.getId()) || idRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         Long id = idRequest.getId();
-        //判断接口是否存在
-        InterfaceInfo oldInterfaceInfo = interfaceInfoService.getInterfaceById(id);
-        if (oldInterfaceInfo == null) {
+        InterfaceInfo interfaceInfo = interfaceInfoService.getById(id);
+        if (interfaceInfo == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
-        //判断该接口是否可以调用
-        User user = new User();
-        user.setUserName("zhj");
-        //String username = yuApiClient.(user);
-        //if (StringUtils.isBlank(username)) {
-        //    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "接口验证失败");
-        //}
-        //仅本人或管理员可修改
-        InterfaceInfo interfaceInfo = new InterfaceInfo();
-        interfaceInfo.setId(id);
-        interfaceInfo.setStatus(InterfaceInfoStatusEnum.ONLINE.getValue());
-        boolean result = interfaceInfoService.updateInterfaceById(interfaceInfo);
-        return ResultUtils.success(result);
+        interfaceInfo.setStatus(InterfaceStatusEnum.ONLINE.getValue());
+        return ResultUtils.success(interfaceInfoService.updateById(interfaceInfo));
     }
 
     /**
@@ -326,7 +381,7 @@ public class InterfaceInfoController {
         //参数
         String requestParams = interfaceInfoInvokeRequest.getRequestParams();
 
-        User loginUser = userService.getLoginUser(request);
+        UserVO loginUser = userService.getLoginUser(request);
         String accessKey = loginUser.getAccessKey();
         String secretKey = loginUser.getSecretKey();
         ApiClient tempClient = new ApiClient(accessKey, secretKey);

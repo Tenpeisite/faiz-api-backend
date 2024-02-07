@@ -2,7 +2,9 @@ package com.zhj.project.service;
 
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhj.common.model.dto.user.UserRegisterRequest;
 import com.zhj.common.model.entity.User;
+import com.zhj.common.model.vo.UserVO;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -16,12 +18,9 @@ public interface UserService extends IService<User> {
     /**
      * 用户注册
      *
-     * @param userAccount   用户账户
-     * @param userPassword  用户密码
-     * @param checkPassword 校验密码
      * @return 新用户 id
      */
-    long userRegister(String userAccount, String userPassword, String checkPassword);
+    long userRegister(UserRegisterRequest userRegisterRequest);
 
     /**
      * 用户登录
@@ -39,7 +38,7 @@ public interface UserService extends IService<User> {
      * @param request
      * @return
      */
-    User getLoginUser(HttpServletRequest request);
+    UserVO getLoginUser(HttpServletRequest request);
 
     /**
      * 是否为管理员
@@ -48,6 +47,14 @@ public interface UserService extends IService<User> {
      * @return
      */
     boolean isAdmin(HttpServletRequest request);
+
+    /**
+     * 是游客
+     *
+     * @param request 要求
+     * @return {@link User}
+     */
+    User isTourist(HttpServletRequest request);
 
     /**
      * 用户注销
@@ -59,5 +66,16 @@ public interface UserService extends IService<User> {
 
     boolean updateKey(Long id);
 
+
+    /**
+     * 添加钱包余额
+     *
+     * @param userId    用户id
+     * @param addPoints 添加点
+     * @return boolean
+     */
+    boolean addWalletBalance(Long userId, Integer addPoints);
+
     User wxAuth(String code);
+
 }

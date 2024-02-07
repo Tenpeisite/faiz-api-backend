@@ -6,69 +6,55 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 查询请求
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ * @author zhj
+ * 
  */
 
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class InterfaceInfoQueryRequest extends PageRequest implements Serializable {
 
-    private Long id;
-
+    private static final long serialVersionUID = 1L;
     /**
-     * 名称
+     * 接口名称
      */
     private String name;
-
     /**
-     * 描述
+     * 返回格式
      */
-    private String description;
-
+    private String returnFormat;
     /**
      * 接口地址
      */
     private String url;
-
     /**
-     * 请求参数
+     * 接口响应参数
      */
-    private String requestParams;
-
+    private List<ResponseParamsField> responseParams;
     /**
-     * 请求头
-     */
-    private String requestHeader;
-
-    /**
-     * 响应头
-     */
-    private String responseHeader;
-
-    /**
-     * 接口状态（0-关闭，1-开启）
-     */
-    private Integer status;
-
-    /**
-     * 请求类型
-     */
-    private String method;
-
-    /**
-     * 创建人
+     * 发布人
      */
     private Long userId;
-
-
     /**
-     * 是否删除(0-未删, 1-已删)
+     * 减少积分个数
      */
-    private Integer isDelete;
+    private Integer reduceScore;
+    /**
+     * 请求方法
+     */
+    private String method;
+    /**
+     * 描述信息
+     */
+    private String description;
+    /**
+     * 接口状态（0- 默认下线 1- 上线）
+     */
+    private Integer status;
 
 }

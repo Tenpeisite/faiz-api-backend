@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhj.common.model.entity.Post;
 import com.zhj.common.model.entity.User;
+import com.zhj.common.model.vo.UserVO;
 import com.zhj.project.annotation.AuthCheck;
 import com.zhj.common.utils.BaseResponse;
 import com.zhj.common.utils.DeleteRequest;
@@ -60,7 +61,7 @@ public class PostController {
         BeanUtils.copyProperties(postAddRequest, post);
         // 校验
         postService.validPost(post, true);
-        User loginUser = userService.getLoginUser(request);
+        UserVO loginUser = userService.getLoginUser(request);
         post.setUserId(loginUser.getId());
         boolean result = postService.save(post);
         if (!result) {
@@ -82,7 +83,7 @@ public class PostController {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        User user = userService.getLoginUser(request);
+        UserVO user = userService.getLoginUser(request);
         long id = deleteRequest.getId();
         // 判断是否存在
         Post oldPost = postService.getById(id);
@@ -114,7 +115,7 @@ public class PostController {
         BeanUtils.copyProperties(postUpdateRequest, post);
         // 参数校验
         postService.validPost(post, false);
-        User user = userService.getLoginUser(request);
+        UserVO user = userService.getLoginUser(request);
         long id = postUpdateRequest.getId();
         // 判断是否存在
         Post oldPost = postService.getById(id);

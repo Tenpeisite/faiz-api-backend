@@ -3,6 +3,7 @@ package com.zhj.project.aop;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 
 import com.zhj.common.model.entity.User;
+import com.zhj.common.model.vo.UserVO;
 import com.zhj.project.annotation.AuthCheck;
 import com.zhj.common.utils.ErrorCode;
 import com.zhj.project.exception.BusinessException;
@@ -49,7 +50,7 @@ public class AuthInterceptor {
         RequestAttributes requestAttributes = RequestContextHolder.currentRequestAttributes();
         HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
         // 当前登录用户
-        User user = userService.getLoginUser(request);
+        UserVO user = userService.getLoginUser(request);
         // 拥有任意权限即通过
         if (CollectionUtils.isNotEmpty(anyRole)) {
             String userRole = user.getUserRole();
