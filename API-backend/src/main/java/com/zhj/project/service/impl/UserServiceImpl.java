@@ -3,12 +3,16 @@ package com.zhj.project.service.impl;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhj.common.constant.EmailConstant;
+import com.zhj.common.constant.RedisConstant;
 import com.zhj.common.constant.UserConstant;
-import com.zhj.common.model.dto.user.UserRegisterRequest;
+import com.zhj.common.model.dto.user.*;
 import com.zhj.common.model.entity.User;
+import com.zhj.common.model.enums.UserAccountStatusEnum;
 import com.zhj.common.model.vo.UserVO;
 import com.zhj.common.utils.ErrorCode;
 import com.zhj.project.exception.BusinessException;
@@ -21,6 +25,7 @@ import org.springframework.aop.framework.AopContext;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -35,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import static com.zhj.common.constant.UserConstant.ADMIN_ROLE;
 import static com.zhj.common.constant.UserConstant.USER_LOGIN_STATE;
@@ -64,6 +70,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Resource
     private UserMapper userMapper;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 盐值，混淆密码
@@ -118,12 +127,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             user.setSecretKey(secretKey);
             user.setInvitationCode(generateRandomString(8));
 
-            //查询邀请码对应用户
-            User invitUser = lambdaQuery().eq(User::getInvitationCode, invitationCode).one();
-            if (invitUser != null) {
-                user.setBalance(100);
-                invitUser.setBalance(invitUser.getBalance() + 100);
-                updateById(invitUser);
+            if (StringUtils.isNotBlank(invitationCode)) {
+                //查询邀请用户
+                User invitUser = lambdaQuery().eq(User::getInvitationCode, invitationCode).one();
+
+                if (invitUser != null) {
+                    user.setBalance(100);
+                    invitUser.setBalance(invitUser.getBalance() + 100);
+                    updateById(invitUser);
+                } else {
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR, "该邀请码无效");
+                }
             }
             //保存数据
             boolean saveResult = this.save(user);
@@ -159,6 +173,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (user == null) {
             log.info("user login failed, userAccount cannot match userPassword");
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或密码错误");
+        }
+        //用户被封禁
+        if (user.getStatus().equals(UserAccountStatusEnum.BAN.getValue())) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "用户账号封禁中");
         }
         // 3. 记录用户的登录态
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
@@ -269,6 +287,184 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         UserServiceImpl proxy = (UserServiceImpl) AopContext.currentProxy();
         User user = proxy.addUser(userInfo);
         return user;
+    }
+
+    @Override
+    public UserVO userBindEmail(UserBindEmailRequest userBindEmailRequest, HttpServletRequest request) {
+        String emailAccount = userBindEmailRequest.getEmailAccount();
+        String captcha = userBindEmailRequest.getCaptcha();
+
+        //校验邮箱格式
+        String emailPattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+        if (!Pattern.matches(emailPattern, emailAccount)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不合法的邮箱地址！");
+        }
+        //校验用户名和验证码
+        if (StringUtils.isBlank(captcha)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码不能为空");
+        }
+        //校验验证码
+        String cacheCode = stringRedisTemplate.opsForValue().get(EmailConstant.CAPTCHA_CACHE_KEY + emailAccount);
+        if (StringUtils.isBlank(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码已过期");
+        }
+        if (!captcha.equals(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码不匹配");
+        }
+
+        //查询该邮箱是否已经绑定
+        Long count = lambdaQuery().eq(User::getEmail, emailAccount).or().eq(User::getUserAccount, emailAccount).count();
+        if (count > 0) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "此邮箱已被绑定,请更换新的邮箱！");
+        }
+        UserVO userVO = getLoginUser(request);
+        userVO.setEmail(emailAccount);
+        User user = new User();
+        user.setId(userVO.getId());
+        user.setEmail(emailAccount);
+        updateById(user);
+        return userVO;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public long userEmailRegister(UserEmailRegisterRequest userEmailRegisterRequest) {
+        String emailAccount = userEmailRegisterRequest.getEmailAccount();
+        String captcha = userEmailRegisterRequest.getCaptcha();
+        String userName = userEmailRegisterRequest.getUserName();
+        String invitationCode = userEmailRegisterRequest.getInvitationCode();
+
+        //校验邮箱格式
+        String emailPattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+        if (!Pattern.matches(emailPattern, emailAccount)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不合法的邮箱地址！");
+        }
+        //校验用户名和验证码
+        if (StringUtils.isAnyBlank(userName, captcha)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数不能为空");
+        }
+        //校验验证码
+        String cacheCode = stringRedisTemplate.opsForValue().get(EmailConstant.CAPTCHA_CACHE_KEY + emailAccount);
+        if (StringUtils.isBlank(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码已过期");
+        }
+        //验证码不匹配
+        if (!captcha.equals(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码不匹配");
+        }
+
+        synchronized (emailAccount.intern()) {
+            Long count = lambdaQuery().eq(User::getEmail, emailAccount).or().eq(User::getEmail, emailAccount).count();
+            if (count > 0) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "该邮箱已被绑定");
+            }
+
+            String accessKey = generateUniqueKey(emailAccount, RandomUtil.randomNumbers(5));
+            String secretKey = generateUniqueKey(emailAccount, RandomUtil.randomNumbers(8));
+
+            User user = new User();
+            user.setUserName(userName);
+            user.setEmail(emailAccount);
+            user.setUserAccount(emailAccount);
+            user.setInvitationCode(generateRandomString(6));
+            user.setAccessKey(accessKey);
+            user.setSecretKey(secretKey);
+
+            boolean flag1 = false;
+            if (StringUtils.isNotBlank(invitationCode)) {
+                //查询邀请用户
+                User invitUser = lambdaQuery().eq(User::getInvitationCode, invitationCode).one();
+
+                if (invitUser != null) {
+                    user.setBalance(100);
+                    invitUser.setBalance(invitUser.getBalance() + 100);
+                    flag1 = updateById(invitUser);
+                } else {
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR, "该邀请码无效");
+                }
+            }
+
+            boolean flag2 = save(user);
+            if (!(flag1 && flag2)) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册失败");
+            }
+            return user.getId();
+        }
+    }
+
+    @Override
+    public UserVO userUnBindEmail(UserUnBindEmailRequest userUnBindEmailRequest, HttpServletRequest request) {
+        String emailAccount = userUnBindEmailRequest.getEmailAccount();
+        String captcha = userUnBindEmailRequest.getCaptcha();
+
+        //校验邮箱格式
+        String emailPattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+        if (!Pattern.matches(emailPattern, emailAccount)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不合法的邮箱地址！");
+        }
+        //校验用户名和验证码
+        if (StringUtils.isBlank(captcha)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码不能为空");
+        }
+        //校验验证码
+        String cacheCode = stringRedisTemplate.opsForValue().get(EmailConstant.CAPTCHA_CACHE_KEY + emailAccount);
+        if (StringUtils.isBlank(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码已过期");
+        }
+        if (!captcha.equals(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码不匹配");
+        }
+
+        UserVO loginUser = getLoginUser(request);
+        User user = new User();
+        user.setId(loginUser.getId());
+        user.setEmail("");
+        boolean flag = updateById(user);
+        if (!flag) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "邮箱解绑失败,请稍后再试！");
+        }
+        loginUser.setEmail(null);
+        return loginUser;
+    }
+
+    @Override
+    public UserVO userEmailLogin(UserEmailLoginRequest userEmailLoginRequest, HttpServletRequest request) {
+        String emailAccount = userEmailLoginRequest.getEmailAccount();
+        String captcha = userEmailLoginRequest.getCaptcha();
+
+        //校验邮箱格式
+        String emailPattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+        if (!Pattern.matches(emailPattern, emailAccount)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不合法的邮箱地址！");
+        }
+        //校验用户名和验证码
+        if (StringUtils.isBlank(captcha)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码不能为空");
+        }
+        //校验验证码
+        String cacheCode = stringRedisTemplate.opsForValue().get(EmailConstant.CAPTCHA_CACHE_KEY + emailAccount);
+        if (StringUtils.isBlank(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码已过期");
+        }
+        if (!captcha.equals(cacheCode)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码不匹配");
+        }
+
+        User user = lambdaQuery().eq(User::getUserAccount, emailAccount).one();
+        if (user == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "用户不存在");
+        }
+
+        //用户被封禁
+        if (user.getStatus().equals(UserAccountStatusEnum.BAN.getValue())) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "用户账号封禁中");
+        }
+        // 3. 记录用户的登录态
+        request.getSession().setAttribute(USER_LOGIN_STATE, user);
+
+        UserVO userVO = new UserVO();
+        BeanUtils.copyProperties(user, userVO);
+        return userVO;
     }
 
     @Transactional

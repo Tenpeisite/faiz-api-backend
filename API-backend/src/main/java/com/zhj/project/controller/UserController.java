@@ -1,29 +1,40 @@
 package com.zhj.project.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.plugins.pagination.PageDTO;
+import com.zhj.common.constant.EmailConstant;
+import com.zhj.common.constant.UserConstant;
 import com.zhj.common.model.entity.User;
+import com.zhj.common.model.enums.UserAccountStatusEnum;
 import com.zhj.common.model.vo.UserVO;
-import com.zhj.common.utils.BaseResponse;
-import com.zhj.common.utils.DeleteRequest;
-import com.zhj.common.utils.ErrorCode;
-import com.zhj.common.utils.ResultUtils;
+import com.zhj.common.utils.*;
 import com.zhj.common.model.dto.user.*;
 import com.zhj.project.annotation.AuthCheck;
+import com.zhj.project.config.EmailConfig;
 import com.zhj.project.exception.BusinessException;
 import com.zhj.project.service.UserService;
+import com.zhj.project.utils.EmailUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import javax.mail.MessagingException;
+import javax.mail.internet.MimeMessage;
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.zhj.common.constant.UserConstant.USER_LOGIN_STATE;
@@ -40,6 +51,15 @@ public class UserController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private JavaMailSender mailSender;
+
+    @Resource
+    private EmailConfig emailConfig;
 
     // region 登录相关
 
@@ -79,6 +99,110 @@ public class UserController {
         UserVO userVO = BeanUtil.copyProperties(user, UserVO.class);
         userVO.setSecretKey(null);
         return ResultUtils.success(userVO);
+    }
+
+
+    /**
+     * 用户电子邮件登录
+     *
+     * @param userEmailLoginRequest 用户登录请求
+     * @param request               请求
+     * @return {@link BaseResponse}<{@link User}>
+     */
+    @PostMapping("/email/login")
+    public BaseResponse<UserVO> userEmailLogin(@RequestBody UserEmailLoginRequest userEmailLoginRequest, HttpServletRequest request) {
+        if (userEmailLoginRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        UserVO user = userService.userEmailLogin(userEmailLoginRequest, request);
+        stringRedisTemplate.delete(EmailConstant.CAPTCHA_CACHE_KEY + userEmailLoginRequest.getEmailAccount());
+        return ResultUtils.success(user);
+    }
+
+    /**
+     * 用户绑定电子邮件
+     *
+     * @param request              请求
+     * @param userBindEmailRequest 用户绑定电子邮件请求
+     * @return {@link BaseResponse}<{@link UserVO}>
+     */
+    @PostMapping("/bind/login")
+    public BaseResponse<UserVO> userBindEmail(@RequestBody UserBindEmailRequest userBindEmailRequest, HttpServletRequest request) {
+        if (userBindEmailRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        UserVO user = userService.userBindEmail(userBindEmailRequest, request);
+        return ResultUtils.success(user);
+    }
+
+    /**
+     * 用户取消绑定电子邮件
+     *
+     * @param request                请求
+     * @param userUnBindEmailRequest 用户取消绑定电子邮件请求
+     * @return {@link BaseResponse}<{@link UserVO}>
+     */
+    @PostMapping("/unbindEmail")
+    public BaseResponse<UserVO> userUnBindEmail(@RequestBody UserUnBindEmailRequest userUnBindEmailRequest, HttpServletRequest request) {
+        if (userUnBindEmailRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        UserVO user = userService.userUnBindEmail(userUnBindEmailRequest, request);
+        stringRedisTemplate.delete(EmailConstant.CAPTCHA_CACHE_KEY + userUnBindEmailRequest.getEmailAccount());
+        return ResultUtils.success(user);
+    }
+
+    /**
+     * 用户电子邮件注册
+     *
+     * @param userEmailRegisterRequest 用户电子邮件注册请求
+     * @return {@link BaseResponse}<{@link UserVO}>
+     */
+    @PostMapping("/email/register")
+    public BaseResponse<Long> userEmailRegister(@RequestBody UserEmailRegisterRequest userEmailRegisterRequest) {
+        if (userEmailRegisterRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        long result = userService.userEmailRegister(userEmailRegisterRequest);
+        stringRedisTemplate.delete(EmailConstant.CAPTCHA_CACHE_KEY + userEmailRegisterRequest.getEmailAccount());
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 获取验证码
+     *
+     * @param emailAccount 电子邮件帐户
+     * @return {@link BaseResponse}<{@link String}>
+     */
+    @GetMapping("/getCaptcha")
+    public BaseResponse<Boolean> getCaptcha(String emailAccount) {
+        if (StringUtils.isBlank(emailAccount)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        String emailPattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
+        if (!Pattern.matches(emailPattern, emailAccount)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不合法的邮箱地址！");
+        }
+        String captcha = RandomUtil.randomNumbers(6);
+        try {
+            sendEmail(emailAccount, captcha);
+            stringRedisTemplate.opsForValue().set(EmailConstant.CAPTCHA_CACHE_KEY + emailAccount, captcha, 5, TimeUnit.MINUTES);
+            return ResultUtils.success(true);
+        } catch (Exception e) {
+            log.error("【发送验证码失败】" + e.getMessage());
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "验证码获取失败");
+        }
+    }
+
+    private void sendEmail(String emailAccount, String captcha) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        // 邮箱发送内容组成
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+        helper.setSubject(EmailConstant.EMAIL_SUBJECT);
+        helper.setText(EmailUtil.buildEmailContent(EmailConstant.EMAIL_HTML_CONTENT_PATH, captcha), true);
+        helper.setTo(emailAccount);
+        helper.setFrom(EmailConstant.EMAIL_TITLE + '<' + emailConfig.getEmailFrom() + '>');
+        mailSender.send(message);
     }
 
     /**
@@ -317,6 +441,50 @@ public class UserController {
         UserVO userVO = new UserVO();
         BeanUtils.copyProperties(invitationCodeUser, userVO);
         return ResultUtils.success(userVO);
+    }
+
+
+    /**
+     * 解封
+     *
+     * @param idRequest id请求
+     * @return {@link BaseResponse}<{@link Boolean}>
+     */
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @PostMapping("/normal")
+    public BaseResponse<Boolean> normalUser(@RequestBody IdRequest idRequest) {
+        if (ObjectUtils.anyNull(idRequest, idRequest.getId()) || idRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Long id = idRequest.getId();
+        User user = userService.getById(id);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+        user.setStatus(UserAccountStatusEnum.NORMAL.getValue());
+        return ResultUtils.success(userService.updateById(user));
+    }
+
+    /**
+     * 封号
+     *
+     * @param idRequest id请求
+     * @param request   请求
+     * @return {@link BaseResponse}<{@link Boolean}>
+     */
+    @PostMapping("/ban")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> banUser(@RequestBody IdRequest idRequest, HttpServletRequest request) {
+        if (ObjectUtils.anyNull(idRequest, idRequest.getId()) || idRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Long id = idRequest.getId();
+        User user = userService.getById(id);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+        user.setStatus(UserAccountStatusEnum.BAN.getValue());
+        return ResultUtils.success(userService.updateById(user));
     }
 
 }
