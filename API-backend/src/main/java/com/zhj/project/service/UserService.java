@@ -2,7 +2,7 @@ package com.zhj.project.service;
 
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.zhj.common.model.dto.user.UserRegisterRequest;
+import com.zhj.common.model.dto.user.*;
 import com.zhj.common.model.entity.User;
 import com.zhj.common.model.vo.UserVO;
 
@@ -78,4 +78,11 @@ public interface UserService extends IService<User> {
 
     User wxAuth(String code);
 
+    UserVO userBindEmail(UserBindEmailRequest userBindEmailRequest, HttpServletRequest request);
+
+    long userEmailRegister(UserEmailRegisterRequest userEmailRegisterRequest);
+
+    UserVO userUnBindEmail(UserUnBindEmailRequest userUnBindEmailRequest, HttpServletRequest request);
+
+    UserVO userEmailLogin(UserEmailLoginRequest userEmailLoginRequest, HttpServletRequest request);
 }
