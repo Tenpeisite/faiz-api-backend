@@ -38,6 +38,10 @@ public class DailyCheckIn implements Serializable {
      */
     private Integer addPoints;
     /**
+     * 签到日期
+     */
+    private String signInDate;
+    /**
      * 创建时间
      */
     private Date createTime;

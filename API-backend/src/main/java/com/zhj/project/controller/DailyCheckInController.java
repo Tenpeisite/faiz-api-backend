@@ -33,10 +33,6 @@ public class DailyCheckInController {
     @Resource
     private DailyCheckInService dailyCheckInService;
 
-    @Resource
-    private UserService userService;
-
-
     // region 增删改查
 
     /**
@@ -46,24 +42,8 @@ public class DailyCheckInController {
      * @return {@link BaseResponse}<{@link Boolean}>
      */
     @PostMapping("/doCheckIn")
-    @Transactional(rollbackFor = Exception.class)
     public BaseResponse<Boolean> doDailyCheckIn(HttpServletRequest request) {
-        UserVO loginUser = userService.getLoginUser(request);
-        LambdaQueryWrapper<DailyCheckIn> dailyCheckInLambdaQueryWrapper = new LambdaQueryWrapper<>();
-        dailyCheckInLambdaQueryWrapper.eq(DailyCheckIn::getUserId, loginUser.getId());
-        DailyCheckIn dailyCheckIn = dailyCheckInService.getOne(dailyCheckInLambdaQueryWrapper);
-        if (ObjectUtils.isNotEmpty(dailyCheckIn)) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "签到失败,今日已签到");
-        }
-        dailyCheckIn = new DailyCheckIn();
-        dailyCheckIn.setUserId(loginUser.getId());
-        dailyCheckIn.setAddPoints(10);
-        boolean dailyCheckInResult = dailyCheckInService.save(dailyCheckIn);
-        boolean addWalletBalance = userService.addWalletBalance(loginUser.getId(), dailyCheckIn.getAddPoints());
-        boolean result = dailyCheckInResult & addWalletBalance;
-        if (!result) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR);
-        }
+        dailyCheckInService.signIn(request);
         return ResultUtils.success(true);
     }
 }

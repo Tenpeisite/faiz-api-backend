@@ -63,6 +63,10 @@ public class InterfaceInfoUpdateRequest implements Serializable {
      * 响应头
      */
     private String responseHeader;
+    /**
+     * 方法名称
+     */
+    private String methodName;
 
     /**
      * 接口请求参数
