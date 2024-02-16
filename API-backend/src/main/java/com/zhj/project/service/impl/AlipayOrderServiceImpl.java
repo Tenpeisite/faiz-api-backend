@@ -35,10 +35,7 @@ import com.zhj.project.config.AliPayAccountConfig;
 import com.zhj.project.config.EmailConfig;
 import com.zhj.project.exception.BusinessException;
 import com.zhj.project.mapper.ProductOrderMapper;
-import com.zhj.project.service.PaymentInfoService;
-import com.zhj.project.service.ProductOrderService;
-import com.zhj.project.service.RechargeActivityService;
-import com.zhj.project.service.UserService;
+import com.zhj.project.service.*;
 import com.zhj.project.utils.EmailUtil;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -66,7 +63,7 @@ import java.util.Map;
 @Service
 @Slf4j
 @Qualifier("ALIPAY")
-public class AlipayOrderServiceImpl extends ServiceImpl<ProductOrderMapper, ProductOrder> implements ProductOrderService {
+public class AlipayOrderServiceImpl extends AbstractProductOrderService {
     @Resource
     private EmailConfig emailConfig;
     @Resource
@@ -84,23 +81,6 @@ public class AlipayOrderServiceImpl extends ServiceImpl<ProductOrderMapper, Prod
     @Resource
     private RechargeActivityService rechargeActivityService;
 
-    @Override
-    public ProductOrderVo getProductOrder(Long productId, UserVO loginUser, String payType) {
-        LambdaQueryWrapper<ProductOrder> lambdaQueryWrapper = new LambdaQueryWrapper<>();
-        lambdaQueryWrapper.eq(ProductOrder::getProductId, productId);
-        lambdaQueryWrapper.eq(ProductOrder::getStatus, PaymentStatusEnum.NOTPAY.getValue());
-        lambdaQueryWrapper.eq(ProductOrder::getPayType, payType);
-        lambdaQueryWrapper.eq(ProductOrder::getUserId, loginUser.getId());
-        ProductOrder oldOrder = this.getOne(lambdaQueryWrapper);
-        if (oldOrder == null) {
-            return null;
-        }
-        ProductOrderVo productOrderVo = new ProductOrderVo();
-        BeanUtils.copyProperties(oldOrder, productOrderVo);
-        productOrderVo.setProductInfo(JSONUtil.toBean(oldOrder.getProductInfo(), ProductInfo.class));
-        productOrderVo.setTotal(oldOrder.getTotal().toString());
-        return productOrderVo;
-    }
 
     @Override
     public ProductOrderVo saveProductOrder(Long productId, UserVO loginUser) {
@@ -135,6 +115,8 @@ public class AlipayOrderServiceImpl extends ServiceImpl<ProductOrderMapper, Prod
         BigDecimal scaledAmount = new BigDecimal(productInfo.getTotal()).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         model.setTotalAmount(String.valueOf(scaledAmount));
         model.setBody(productInfo.getDescription());
+        //超时时间
+        model.setTimeExpire(expirationTime.toString());
 
         AlipayTradePagePayRequest request = new AlipayTradePagePayRequest();
         request.setBizModel(model);

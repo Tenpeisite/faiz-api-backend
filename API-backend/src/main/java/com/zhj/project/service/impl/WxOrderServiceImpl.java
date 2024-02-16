@@ -29,10 +29,7 @@ import com.zhj.common.utils.ErrorCode;
 import com.zhj.project.config.EmailConfig;
 import com.zhj.project.exception.BusinessException;
 import com.zhj.project.mapper.ProductOrderMapper;
-import com.zhj.project.service.PaymentInfoService;
-import com.zhj.project.service.ProductOrderService;
-import com.zhj.project.service.RechargeActivityService;
-import com.zhj.project.service.UserService;
+import com.zhj.project.service.*;
 import com.zhj.project.utils.EmailUtil;
 import com.zhj.project.utils.WxPayUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +62,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 @Qualifier("WX")
 @Primary
-public class WxOrderServiceImpl extends ServiceImpl<ProductOrderMapper, ProductOrder> implements ProductOrderService {
+public class WxOrderServiceImpl extends AbstractProductOrderService {
     @Resource
     private RedisTemplate<String, Boolean> redisTemplate;
 
@@ -87,34 +84,6 @@ public class WxOrderServiceImpl extends ServiceImpl<ProductOrderMapper, ProductO
     private PaymentInfoService paymentInfoService;
     @Resource
     private RechargeActivityService rechargeActivityService;
-
-    /**
-     * 获取产品订单
-     *
-     * @param productId 产品id
-     * @param loginUser 登录用户
-     * @param payType   付款类型
-     * @return {@link ProductOrderVo}
-     */
-    @Override
-    public ProductOrderVo getProductOrder(Long productId, UserVO loginUser, String payType) {
-        LambdaQueryWrapper<ProductOrder> lambdaQueryWrapper = new LambdaQueryWrapper<>();
-        lambdaQueryWrapper.eq(ProductOrder::getProductId, productId);
-        lambdaQueryWrapper.eq(ProductOrder::getStatus, PaymentStatusEnum.NOTPAY.getValue());
-        lambdaQueryWrapper.eq(ProductOrder::getPayType, payType);
-        lambdaQueryWrapper.eq(ProductOrder::getUserId, loginUser.getId());
-        lambdaQueryWrapper.gt(ProductOrder::getExpirationTime, DateUtil.date(System.currentTimeMillis()));
-
-        ProductOrder oldOrder = this.getOne(lambdaQueryWrapper);
-        if (oldOrder == null) {
-            return null;
-        }
-        ProductOrderVo productOrderVo = new ProductOrderVo();
-        BeanUtils.copyProperties(oldOrder, productOrderVo);
-        productOrderVo.setTotal(oldOrder.getTotal().toString());
-        productOrderVo.setProductInfo(JSONUtil.toBean(oldOrder.getProductInfo(), ProductInfo.class));
-        return productOrderVo;
-    }
 
     /**
      * 保存产品订单

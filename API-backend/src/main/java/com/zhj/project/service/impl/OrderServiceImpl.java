@@ -11,6 +11,7 @@ import com.zhj.common.model.vo.ProductOrderVo;
 import com.zhj.common.model.vo.UserVO;
 import com.zhj.common.utils.ErrorCode;
 import com.zhj.project.exception.BusinessException;
+import com.zhj.project.service.AbstractOrderService;
 import com.zhj.project.service.OrderService;
 import com.zhj.project.service.ProductOrderService;
 import com.zhj.project.service.RechargeActivityService;
@@ -34,19 +35,8 @@ import java.util.List;
  */
 @Slf4j
 @Service
-public class OrderServiceImpl implements OrderService {
+public class OrderServiceImpl extends AbstractOrderService {
 
-    @Resource
-    private ProductOrderService productOrderService;
-
-    @Resource
-    private List<ProductOrderService> productOrderServices;
-
-    @Resource
-    private RechargeActivityService rechargeActivityService;
-
-    @Resource
-    private ProductInfoServiceImpl productInfoService;
 
     /**
      * 按付费类型获取产品订单服务
@@ -56,30 +46,11 @@ public class OrderServiceImpl implements OrderService {
      */
     @Override
     public ProductOrderService getProductOrderServiceByPayType(String payType) {
-        return productOrderServices.stream()
-                .filter(s -> {
-                    Qualifier qualifierAnnotation = s.getClass().getAnnotation(Qualifier.class);
-                    return qualifierAnnotation != null && qualifierAnnotation.value().equals(payType);
-                })
-                .findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.PARAMS_ERROR, "暂无该支付方式"));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public ProductOrderVo createOrderByPayType(Long productId, String payType, UserVO loginUser) {
-        // 按付费类型获取产品订单服务Bean
-        ProductOrderService productOrderService = getProductOrderServiceByPayType(payType);
-
-        // 订单存在就返回不再新创建
-        ProductOrderVo getProductOrderVo = productOrderService.getProductOrder(productId, loginUser, payType);
-        if (getProductOrderVo != null) {
-            return getProductOrderVo;
+        ProductOrderService productOrderService = payTypeMap.get(payType);
+        if (productOrderService == null) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "暂无该支付方式");
         }
-        // 检查是否购买充值活动
-        checkBuyRechargeActivity(loginUser.getId(), productId);
-        // 保存订单,返回vo信息
-        return productOrderService.saveProductOrder(productId, loginUser);
+        return productOrderService;
     }
 
     /**
@@ -88,7 +59,7 @@ public class OrderServiceImpl implements OrderService {
      * @param userId    用户id
      * @param productId 产品订单id
      */
-    private void checkBuyRechargeActivity(Long userId, Long productId) {
+    protected void checkBuyRechargeActivity(Long userId, Long productId) {
         ProductInfo productInfo = productInfoService.getById(productId);
         if (productInfo.getProductType().equals(ProductTypeStatusEnum.RECHARGE_ACTIVITY.getValue())) {
             LambdaQueryWrapper<ProductOrder> orderLambdaQueryWrapper = new LambdaQueryWrapper<>();

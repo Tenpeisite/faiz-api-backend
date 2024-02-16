@@ -1,5 +1,7 @@
 package com.zhj;
 
+import cn.hutool.core.date.DateField;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.zhj.common.constant.RedisConstant;
 import com.zhj.common.constant.UserConstant;
@@ -23,7 +25,7 @@ import java.util.UUID;
  * @description TODO
  * @date 2023/6/21 10:48
  */
-@SpringBootTest(classes = MyApplication.class)
+//@SpringBootTest(classes = MyApplication.class)
 public class Test1 {
 
     @Resource
@@ -65,6 +67,13 @@ public class Test1 {
                 .eq(DailyCheckIn::getSignInDate, today)
                 .count();
         System.out.println("今天是否签到：" + (count > 0 ? true : false));
+    }
+
+    @Test
+    public void test(){
+        Date date = DateUtil.date(System.currentTimeMillis());
+        Date expirationTime = DateUtil.offset(date, DateField.MINUTE, 5);
+        System.out.println(expirationTime.toString());
     }
 
 }

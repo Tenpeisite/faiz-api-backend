@@ -5,13 +5,20 @@ import com.github.binarywang.wxpay.service.WxPayService;
 import com.github.binarywang.wxpay.service.impl.WxPayServiceImpl;
 import com.ijpay.alipay.AliPayApiConfig;
 import com.ijpay.alipay.AliPayApiConfigKit;
+import com.zhj.common.utils.ErrorCode;
+import com.zhj.project.exception.BusinessException;
+import com.zhj.project.service.ProductOrderService;
 import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import javax.annotation.Resource;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @Author: zhj
@@ -26,6 +33,7 @@ public class PayConfiguration {
     private WxPayAccountConfig properties;
     @Resource
     private AliPayAccountConfig aliPayAccountConfig;
+
 
     @Bean
     @ConditionalOnMissingBean
@@ -57,5 +65,15 @@ public class PayConfiguration {
                 .setCertModel(false)
                 .build(); // 普通公钥方式
         AliPayApiConfigKit.setThreadLocalAliPayApiConfig(aliPayApiConfig);
+    }
+
+    @Bean
+    public Map<String, ProductOrderService> payTypeMap(List<ProductOrderService> productOrderServices) {
+        ConcurrentHashMap<String, ProductOrderService> map = new ConcurrentHashMap<>();
+        productOrderServices.forEach(productOrderService -> {
+            Qualifier qualifier = productOrderService.getClass().getAnnotation(Qualifier.class);
+            map.put(qualifier.value(), productOrderService);
+        });
+        return map;
     }
 }
