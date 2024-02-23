@@ -39,6 +39,7 @@
         <nacos-clien.version>2.2.0</nacos-clien.version>
         <canal-spring-boot-starter.version>1.2.1-RELEASE</canal-spring-boot-starter.version>
         <hutool-all.version>5.8.8</hutool-all.version>
+        <redisson.version>3.17.5</redisson.version>
     </properties>
 
     <dependencyManagement>
@@ -183,6 +184,11 @@
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-all</artifactId>
                 <version>${hutool-all.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson</artifactId>
+                <version>${redisson.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

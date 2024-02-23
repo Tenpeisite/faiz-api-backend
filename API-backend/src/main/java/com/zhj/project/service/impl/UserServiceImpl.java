@@ -450,7 +450,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "验证码不匹配");
         }
 
-        User user = lambdaQuery().eq(User::getUserAccount, emailAccount).one();
+        User user = lambdaQuery().eq(User::getEmail, emailAccount).one();
         if (user == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "用户不存在");
         }

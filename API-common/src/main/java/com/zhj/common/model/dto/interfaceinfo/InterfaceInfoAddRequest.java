@@ -58,5 +58,9 @@ public class InterfaceInfoAddRequest implements Serializable { private static fi
      * 响应头
      */
     private String responseHeader;
+    /**
+     * 方法名称
+     */
+    private String methodName;
 
 }

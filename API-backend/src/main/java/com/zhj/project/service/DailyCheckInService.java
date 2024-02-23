@@ -3,6 +3,8 @@ package com.zhj.project.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhj.common.model.entity.DailyCheckIn;
 
+import javax.servlet.http.HttpServletRequest;
+
 /**
  * @Author: zhj
  * @Date: 2023/08/31 11:48:17
@@ -11,4 +13,5 @@ import com.zhj.common.model.entity.DailyCheckIn;
  */
 public interface DailyCheckInService extends IService<DailyCheckIn> {
 
+    void signIn(HttpServletRequest request);
 }
