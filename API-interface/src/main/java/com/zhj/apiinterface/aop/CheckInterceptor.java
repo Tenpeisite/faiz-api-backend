@@ -1,9 +1,9 @@
 package com.zhj.apiinterface.aop;
 
 
-
 import com.zhj.apiinterface.exception.BusinessException;
 import com.zhj.common.utils.ErrorCode;
+import com.zhj.common.utils.RateLimiterUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -39,6 +39,10 @@ public class CheckInterceptor {
         String apiHeader = request.getHeader("apiHeader");
         if (!"api".equals(apiHeader)) {
             throw new BusinessException(ErrorCode.INTERFACE_USE_ERROR);
+        }
+        boolean acquire = RateLimiterUtil.acquire();
+        if (!acquire) {
+            throw new BusinessException(ErrorCode.INTERFACE_USE_FREQUENTLY);
         }
         try {
             return pjp.proceed();

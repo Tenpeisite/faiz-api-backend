@@ -1,5 +1,8 @@
 package com.zhj.apigateway.keyResolver;
 
+import com.zhj.common.model.entity.User;
+import com.zhj.common.service.InnerUserService;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
@@ -15,10 +18,15 @@ import reactor.core.publisher.Mono;
 @Component
 public class HostAddrKeyResolver implements KeyResolver {
 
+    @DubboReference
+    private InnerUserService innerUserService;
+
     @Override
     public Mono<String> resolve(ServerWebExchange exchange) {
-        //根据ip地址限流
-        return Mono.just(exchange.getRequest().getRemoteAddress().getAddress().getHostAddress());
+        String accessKey = exchange.getRequest().getHeaders().getFirst("accessKey");
+        User user = innerUserService.getInvokeUser(accessKey);
+        //根据用户id地址限流
+        return Mono.just(user.getId()+"");
     }
 
 }

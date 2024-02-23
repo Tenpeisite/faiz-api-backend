@@ -17,7 +17,9 @@ public enum ErrorCode {
     SYSTEM_ERROR(50000, "系统内部异常"),
     OPERATION_ERROR(50001, "操作失败"),
     INTERFACE_ERROR(50002, "接口调用异常"),
-    INTERFACE_USE_ERROR(50003, "接口调用请走网关");
+    INTERFACE_USE_ERROR(50003, "接口调用请走网关"),
+    INTERFACE_USE_FREQUENTLY(50004, "接口正被频繁调用，请稍后再试")
+    ;
 
     /**
      * 状态码

@@ -2,7 +2,10 @@ package com.zhj.apigateway.factory;
 
 
 import com.zhj.common.constant.RedisConstant;
+import com.zhj.common.model.entity.User;
+import com.zhj.common.service.InnerUserService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.RequestRateLimiterGatewayFilterFactory;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
@@ -31,6 +34,8 @@ import java.util.Map;
 public class CustomRequestRateLimiterGatewayFilterFactory extends RequestRateLimiterGatewayFilterFactory {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+    @DubboReference
+    private InnerUserService innerUserService;
 
     private final RateLimiter defaultRateLimiter;
 
@@ -61,9 +66,10 @@ public class CustomRequestRateLimiterGatewayFilterFactory extends RequestRateLim
                     return chain.filter(exchange);
                 }
                 log.warn("已限流: {}", finalRouteId);
-                //将ip地址加入黑名单
-                String ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress();
-                stringRedisTemplate.opsForZSet().add(RedisConstant.BLACK_LIST,ip,System.currentTimeMillis());
+                //将用户加入黑名单
+                String accessKey = exchange.getRequest().getHeaders().getFirst("accessKey");
+                User user = innerUserService.getInvokeUser(accessKey);
+                stringRedisTemplate.opsForZSet().add(RedisConstant.BLACK_LIST,user.getId()+"",System.currentTimeMillis());
                 //修改code为500
                 ServerHttpResponse httpResponse = exchange.getResponse();
                 httpResponse.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
