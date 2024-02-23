@@ -17,4 +17,11 @@ public interface InnerUserService{
      * @return
      */
     User getInvokeUser(String accessKey);
+
+    /**
+     * 是否还有余额
+     * @param userId
+     * @return
+     */
+    boolean isBalance(Long userId);
 }

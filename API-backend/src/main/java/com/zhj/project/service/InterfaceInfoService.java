@@ -14,4 +14,9 @@ public interface InterfaceInfoService extends IService<InterfaceInfo> {
     boolean updateInterfaceById(InterfaceInfo interfaceInfo);
 
     InterfaceInfo getInterfaceById(long id);
+
+    boolean invokeCount(Long interfaceId, Long userId);
+
+    void changeCount(Long userId, Long interfaceInfoId);
+
 }

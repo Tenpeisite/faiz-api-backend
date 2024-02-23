@@ -4,10 +4,12 @@ import com.alibaba.fastjson.JSON;
 
 import com.zhj.common.constant.RedisConstant;
 import com.zhj.common.model.entity.InterfaceInfo;
+import com.zhj.common.model.entity.User;
 import com.zhj.common.model.entity.UserInterfaceInfo;
 import com.zhj.common.model.vo.InterfaceInfoVO;
 import com.zhj.project.mapper.UserInterfaceInfoMapper;
 import com.zhj.project.service.InterfaceInfoService;
+import com.zhj.project.service.UserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
@@ -25,7 +27,7 @@ import static com.zhj.common.constant.CommonConstant.INTERFACE_RANK;
  * @description TODO
  * @date 2023/4/22 14:04
  */
-//@Component
+@Component
 public class InitTask implements CommandLineRunner {
 
     @Resource
@@ -37,13 +39,18 @@ public class InitTask implements CommandLineRunner {
     @Autowired
     private InterfaceInfoService interfaceInfoService;
 
+    @Resource
+    private UserService userService;
+
     @Override
     public void run(String... args) throws Exception {
         //加载所有接口的总调用次数到redis
-        loadAllInterfaceInvokeCount2Redis();
+        //loadAllInterfaceInvokeCount2Redis();
         //加载每个用户的接口剩余调用次数到redis
-        loadAllLeftCount2Redis();
+        //loadAllLeftCount2Redis();
 
+        //加载每个用户的余额到redis
+        loadAllUserBalance2Redis();
     }
 
     /**
@@ -76,5 +83,12 @@ public class InitTask implements CommandLineRunner {
             //将剩余次数存入reids
             stringRedisTemplate.opsForValue().set(key, interfaceInfo.getLeftNum().toString());
         });
+    }
+
+    private void loadAllUserBalance2Redis() {
+        List<User> users = userService.list();
+        for (User user : users) {
+            stringRedisTemplate.opsForValue().set(RedisConstant.INTERFACE_LEFTCOUNT + user.getId(), user.getBalance().toString());
+        }
     }
 }

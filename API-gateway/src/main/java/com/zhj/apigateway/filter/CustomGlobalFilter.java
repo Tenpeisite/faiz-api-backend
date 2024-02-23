@@ -101,6 +101,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         String nonce = headers.getFirst("nonce");
         String timestamp = headers.getFirst("timestamp");
         String sign = headers.getFirst("sign");
+        String methodName = headers.getFirst("methodName");
         String apiHeader = headers.getFirst("apiHeader");
         String first = headers.getFirst("X-My-Header");
         //增加一个请求头
@@ -134,7 +135,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         //4.请求的模拟接口是否存在？
         InterfaceInfo interfoceInfo = null;
         try {
-            interfoceInfo = innerInterfaceInfoService.getInterfoceInfo(path, method);
+            interfoceInfo = innerInterfaceInfoService.getInterfoceInfo(methodName, method);
         } catch (Exception e) {
             e.printStackTrace();
             log.info("getInterfaceInfo error", e);
@@ -144,7 +145,8 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         }
         //todo 5.判断用户是否还有剩余调用次数
         //使用次数
-        boolean flag = innerUserInterfaceInfoService.isNumOfUse(interfoceInfo.getId(), invokeUser.getId());
+        //boolean flag = innerUserInterfaceInfoService.isNumOfUse(interfoceInfo.getId(), invokeUser.getId());
+        boolean flag = innerUserService.isBalance(invokeUser.getId());
         if (!flag) {
             response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
             response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
@@ -211,7 +213,8 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
                                         // 7. 调用成功，接口调用次数 + 1 invokeCount
                                         boolean flag = false;
                                         try {
-                                            flag = innerUserInterfaceInfoService.invokeCount(interfaceInfoId, userId);
+                                            //flag = innerUserInterfaceInfoService.invokeCount(interfaceInfoId, userId);
+                                            flag = innerInterfaceInfoService.invokeCount(interfaceInfoId,userId);
                                             log.info("<-------修改接口调用次数：{}", flag == true ? "成功" : "失败");
                                         } catch (Exception e) {
                                             log.error("invokeCount error", e);
