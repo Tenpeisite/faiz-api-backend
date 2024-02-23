@@ -42,4 +42,14 @@ public interface OrderService {
      */
     ProductOrderVo createOrderByPayType(Long productId, String payType, UserVO loginUser);
 
+    /**
+     * 按时间获得未支付订单
+     *
+     * @param minutes 分钟
+     * @param remove  是否是删除
+     * @param payType 付款类型
+     * @return {@link List}<{@link ProductOrder}>
+     */
+    List<ProductOrder> getNoPayOrderByDuration(int minutes, Boolean remove, String payType);
+
 }

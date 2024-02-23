@@ -77,7 +77,7 @@ public class OrderController {
     }
 
     @PostMapping("/delete")
-    public BaseResponse<Boolean> deleteProductOrder(int id, HttpServletRequest request) {
+    public BaseResponse<Boolean> deleteProductOrder(Long id, HttpServletRequest request) {
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }

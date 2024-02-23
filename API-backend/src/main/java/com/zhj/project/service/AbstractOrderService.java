@@ -44,8 +44,7 @@ public abstract class AbstractOrderService implements OrderService {
     @Override
     public ProductOrderVo createOrderByPayType(Long productId, String payType, UserVO loginUser) {
         // 按付费类型获取产品订单服务Bean
-        ProductOrderService productOrderService = getProductOrderServiceByPayType(payType);
-
+        ProductOrderService productOrderService = payTypeMap.get(payType);
         // 订单存在就返回不再新创建
         ProductOrderVo getProductOrderVo = productOrderService.getProductOrder(productId, loginUser, payType);
         if (getProductOrderVo != null) {
@@ -68,13 +67,4 @@ public abstract class AbstractOrderService implements OrderService {
     protected abstract void checkBuyRechargeActivity(Long userId, Long productId) ;
 
 
-    /**
-     * 按时间获得未支付订单
-     *
-     * @param minutes 分钟
-     * @param remove  是否是删除
-     * @param payType 付款类型
-     * @return {@link List}<{@link ProductOrder}>
-     */
-    protected abstract List<ProductOrder> getNoPayOrderByDuration(int minutes, Boolean remove, String payType);
 }

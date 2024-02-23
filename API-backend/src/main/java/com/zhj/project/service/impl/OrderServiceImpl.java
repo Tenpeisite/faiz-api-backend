@@ -25,6 +25,9 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -63,10 +66,12 @@ public class OrderServiceImpl extends AbstractOrderService {
         ProductInfo productInfo = productInfoService.getById(productId);
         if (productInfo.getProductType().equals(ProductTypeStatusEnum.RECHARGE_ACTIVITY.getValue())) {
             LambdaQueryWrapper<ProductOrder> orderLambdaQueryWrapper = new LambdaQueryWrapper<>();
-            orderLambdaQueryWrapper.eq(ProductOrder::getUserId, userId);
-            orderLambdaQueryWrapper.eq(ProductOrder::getProductId, productId);
-            orderLambdaQueryWrapper.eq(ProductOrder::getStatus, PaymentStatusEnum.NOTPAY.getValue());
-            orderLambdaQueryWrapper.or().eq(ProductOrder::getStatus, PaymentStatusEnum.SUCCESS.getValue());
+            orderLambdaQueryWrapper.eq(ProductOrder::getUserId, 1755188564133539842L);
+            orderLambdaQueryWrapper.eq(ProductOrder::getProductId, 1695338876708544514L);
+            orderLambdaQueryWrapper.and(productOrderLambdaQueryWrapper -> {
+                productOrderLambdaQueryWrapper.eq(ProductOrder::getStatus, PaymentStatusEnum.NOTPAY.getValue())
+                        .or().eq(ProductOrder::getStatus, PaymentStatusEnum.SUCCESS.getValue());
+            });
 
             long orderCount = productOrderService.count(orderLambdaQueryWrapper);
             if (orderCount > 0) {
@@ -90,7 +95,6 @@ public class OrderServiceImpl extends AbstractOrderService {
      */
     @Override
     public List<ProductOrder> getNoPayOrderByDuration(int minutes, Boolean remove, String payType) {
-        Instant instant = Instant.now().minus(Duration.ofMinutes(minutes));
         LambdaQueryWrapper<ProductOrder> productOrderLambdaQueryWrapper = new LambdaQueryWrapper<>();
         productOrderLambdaQueryWrapper.eq(ProductOrder::getStatus, PaymentStatusEnum.NOTPAY.getValue());
         if (StringUtils.isNotBlank(payType)) {
@@ -100,7 +104,8 @@ public class OrderServiceImpl extends AbstractOrderService {
         if (remove) {
             productOrderLambdaQueryWrapper.or().eq(ProductOrder::getStatus, PaymentStatusEnum.CLOSED.getValue());
         }
-        productOrderLambdaQueryWrapper.and(p -> p.le(ProductOrder::getCreateTime, instant));
+        Date date = new Date();
+        productOrderLambdaQueryWrapper.and(p -> p.le(ProductOrder::getExpirationTime, date));
         return productOrderService.list(productOrderLambdaQueryWrapper);
     }
 
