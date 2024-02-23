@@ -83,19 +83,10 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         log.info("接口路径:" + path);
         log.info("请求方法:" + method);
         log.info("请求参数:" + request.getQueryParams());
-        //log.info("请求ip和端口号:" + request.getRemoteAddress());
         String sourceAddress = request.getRemoteAddress().getAddress().getHostAddress();
         log.info("请求ip:" + sourceAddress);
-        //2.访问控制 - 黑名单
         ServerHttpResponse response = exchange.getResponse();
-        //获得ip地址在zset集合中的排名。
-        //如果ip地址存在redis，则根据score返回排名；否则，返回null
-        Long rank = stringRedisTemplate.opsForZSet().rank(RedisConstant.BLACK_LIST, sourceAddress);
-        if (rank != null) {
-            //在黑名单中
-            return handleBlack(response);
-        }
-        //3.用户鉴权（判断 ak sk 是否合法）
+        //2.用户鉴权（判断 ak sk 是否合法）
         HttpHeaders headers = request.getHeaders();
         String accessKey = headers.getFirst("accessKey");
         String nonce = headers.getFirst("nonce");
@@ -132,6 +123,14 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         if (sign == null || !sign.equals(serverSign)) {
             return handleNoAuth(response);
         }
+        //3.访问控制 - 黑名单
+        //获得用户id在zset集合中的排名。
+        //如果ip地址存在redis，则根据score返回排名；否则，返回null
+        Long rank = stringRedisTemplate.opsForZSet().rank(RedisConstant.BLACK_LIST, invokeUser.getId().toString());
+        if (rank != null) {
+            //在黑名单中
+            return handleBlack(response);
+        }
         //4.请求的模拟接口是否存在？
         InterfaceInfo interfoceInfo = null;
         try {
@@ -143,7 +142,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
         if (interfoceInfo == null) {
             return handleNoAuth(response);
         }
-        //todo 5.判断用户是否还有剩余调用次数
+        //5.判断用户是否还有剩余调用次数
         //使用次数
         //boolean flag = innerUserInterfaceInfoService.isNumOfUse(interfoceInfo.getId(), invokeUser.getId());
         boolean flag = innerUserService.isBalance(invokeUser.getId());
@@ -153,7 +152,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
             String responseBody = "调用次数已用完";
             return response.writeWith(Mono.just(response.bufferFactory().wrap(responseBody.getBytes())));
         }
-        //5.请求转发，调用模拟接口+响应日志
+        //6.请求转发，调用模拟接口+响应日志
         return handleResponse(exchange, chain, interfoceInfo.getId(), interfoceInfo.getUserId());
         //Mono<Void> filter = chain.filter(exchange);
         //return filter();
@@ -176,7 +175,7 @@ public class CustomGlobalFilter implements GlobalFilter, Ordered {
 
     private Mono<Void> handleBlack(ServerHttpResponse response) {
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
-        String responseBody = "ip被封了";
+        String responseBody = "您被封禁30分钟，请稍后再试";
         DataBuffer buffer = response.bufferFactory().wrap(responseBody.getBytes());
         return response.writeWith(Flux.just(buffer));
     }
