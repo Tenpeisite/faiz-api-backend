@@ -11,7 +11,9 @@ public interface InnerInterfaceInfoService{
      * @param method
      * @return
      */
-    InterfaceInfo getInterfoceInfo(String path, String method);
+    InterfaceInfo getInterfoceInfo(String methodName, String method);
 
-    String getInterfaceUrl(String path);
+    String getInterfaceUrl(String methodName);
+
+    boolean invokeCount(Long interfaceId,Long userId);
 }

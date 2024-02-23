@@ -2,12 +2,14 @@ package com.zhj.apiinterface.controller;
 
 
 
+import cn.hutool.json.JSONUtil;
 import com.zhj.common.model.entity.User;
 import com.zhj.common.service.InnerUsernameService;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.Map;
 
 /**
  * @author 朱焕杰
@@ -19,12 +21,11 @@ import javax.servlet.http.HttpServletRequest;
 @RequestMapping("/name")
 public class NameController {
 
-    @DubboReference
-    private InnerUsernameService usernameService;
 
-    @GetMapping("/")
-    public String getNameByGet(String name) {
-        return "GET 你的名字是" + name;
+    @GetMapping("/{json}")
+    public String getNameByGet(@PathVariable("json") String json) {
+        Map map = JSONUtil.toBean(json, Map.class);
+        return "GET 你的名字是" + map.get("name");
     }
 
     @PostMapping("/post")
@@ -56,8 +57,4 @@ public class NameController {
         return "POST 用户名字是" + user.getUserName();
     }
 
-    @GetMapping("/random")
-    public String getRandomName() {
-        return usernameService.getRandomName();
-    }
 }

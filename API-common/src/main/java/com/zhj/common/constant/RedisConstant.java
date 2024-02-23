@@ -8,7 +8,7 @@ package com.zhj.common.constant;
  */
 public interface RedisConstant {
 
-    String INTERFACE_LEFTCOUNT = "interface:left:";
+    String INTERFACE_LEFTCOUNT = "user:left:";
     Long EXPIRE_TIME=30L;
     String INTERFACE="interface:";
     String BLACK_LIST="user:black";

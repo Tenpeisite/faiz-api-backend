@@ -36,6 +36,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -356,13 +357,13 @@ public class InterfaceInfoController {
 
 
     @PostMapping("/invoke")
-    public BaseResponse<Object> invokeInterfaceInfo(@RequestBody InterfaceInfoInvokeRequest interfaceInfoInvokeRequest,
+    public BaseResponse<Object> invokeInterfaceInfo(@RequestBody InvokeRequest invokeRequest,
                                                     HttpServletRequest request) {
-        if (interfaceInfoInvokeRequest == null || interfaceInfoInvokeRequest.getId() <= 0) {
+        if (invokeRequest == null || invokeRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         //接口id
-        Long id = interfaceInfoInvokeRequest.getId();
+        Long id = invokeRequest.getId();
 
         //判断是否存在
         InterfaceInfo oldInterface = interfaceInfoService.getInterfaceById(id);
@@ -378,8 +379,8 @@ public class InterfaceInfoController {
         String methodName = oldInterface.getMethodName();
         //请求方式
         String methodType = oldInterface.getMethod();
-        //参数
-        String requestParams = interfaceInfoInvokeRequest.getRequestParams();
+        //构建参数
+        List<InvokeRequest.Field> requestParams = invokeRequest.getRequestParams();
 
         UserVO loginUser = userService.getLoginUser(request);
         String accessKey = loginUser.getAccessKey();
@@ -395,7 +396,7 @@ public class InterfaceInfoController {
         // 简单工厂模式 + 策略模式
         try {
             RequestMethod requestMethod = new RequestMethodFactory().getBean(methodType);
-             result = requestMethod.invoke(tempClient, methodName,requestParams);
+            result = requestMethod.invoke(tempClient, methodName, requestParams);
 
         } catch (Exception e) {
             e.printStackTrace();

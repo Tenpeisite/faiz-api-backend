@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
  * @date 2023/4/4 20:18
  */
 @Configuration
-@ConfigurationProperties("api.client")
+@ConfigurationProperties("faiz.api.client")
 @Data
 @ComponentScan
 public class ApiClientConfig {

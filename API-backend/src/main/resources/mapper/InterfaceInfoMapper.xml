@@ -30,6 +30,6 @@
     <select id="getInterfaceUrl" resultType="java.lang.String">
         select url
         from interface_info
-        where path = #{value}
+        where methodName = #{value}
     </select>
 </mapper>
